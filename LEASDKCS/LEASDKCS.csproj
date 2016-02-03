@@ -47,14 +47,14 @@
     <Compile Include="TCPLayerLite.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="LICENSE.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="SDKSample.ppk" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy /Y "$(ProjectDir)SDKSample.ppk" "$(TargetDir)SDKSample.ppk"</PostBuildEvent>
+    <PostBuildEvent>copy /Y "$(ProjectDir)SDKSample.ppk" "$(TargetDir)SDKSample.ppk"
+if not exist "$(TargetDir)inventorySprites\" mkdir "$(TargetDir)inventorySprites\"
+copy /Y "$(ProjectDir)inventorySprites\*.png" "$(TargetDir)inventorySprites\"
+</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

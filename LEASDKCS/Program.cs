@@ -5,6 +5,8 @@ using System.Text;
 using System.Net;
 using System.Threading;
 using System.Globalization;
+using System.IO;
+using System.Reflection;
 
 namespace LEASDKCS
 {
@@ -14,6 +16,9 @@ namespace LEASDKCS
         static int port = 45612;
         static string gameName = "LEA SDK";
         static string projectName = "LEA SDK";
+        static string InventoryName = "Inventory";
+
+        static bool autoForceLoad = false;
 
         static bool connected = false;
         static AutoResetEvent ARE = new AutoResetEvent(false);
@@ -75,6 +80,9 @@ namespace LEASDKCS
                 return;
             }
             Console.WriteLine();
+
+            commands.ConnectedClientAnswerReceived += commands_ConnectedClientAnswerReceived;
+            commands.ConnectedClientLoadedProjectAnswerReceived += commands_ConnectedClientLoadedProjectAnswerReceived;
 
             Console.WriteLine("Choose the server mode and press enter.");
             Console.WriteLine("  1: push mode. The server update this program when it get any input from clients.");
@@ -180,6 +188,9 @@ namespace LEASDKCS
             EMDList.Add(new commands.EMData("POV1", "-1", commands.EMType.POV));
             EMDList.Add(new commands.EMData("buttonPOV1", "False", commands.EMType.BUTTON));
             EMDList.Add(new commands.EMData("buttonPOV2", "False", commands.EMType.BUTTON));
+
+            EMDList.Add(new commands.EMData("Inventory", "", commands.EMType.INVENTORY));
+
             commands.registerCommands(EMDList);
 
             Console.WriteLine();
@@ -214,6 +225,11 @@ namespace LEASDKCS
             Console.WriteLine("Resynch.");
             commands.sendResynchData();
 
+            Console.WriteLine("Check if project" + projectName + " is loaded on clients.");
+            commands.sendConnectedClientsProjects();
+
+            Console.WriteLine();
+
             Console.WriteLine("Ready.");
 
             while (true)
@@ -230,6 +246,10 @@ namespace LEASDKCS
                 else if (input == "resynch") // for debug purpose only
                 {
                     commands.sendResynchData();
+                }
+                else if (input == "clients")
+                {
+                    commands.sendConnectedClientsProjects();
                 }
                 else
                 {
@@ -386,5 +406,142 @@ namespace LEASDKCS
                 Console.WriteLine("Command: " + EMD.EMTag + "; Value: " + EMD.EMValue);
             }
         }
+
+        static void commands_ConnectedClientAnswerReceived(commands.connectedClient data)
+        {
+            if (autoForceLoad)
+            {
+                Console.WriteLine("Force load project " + projectName + " on device: " + data.deviceName + " with ID hash: " + data.IDHash + ".");
+                commands.sendForceLoadProjectOnClients(new List<string> { data.IDHash }, gameName, projectName);
+            }
+        }
+
+        static void commands_ConnectedClientLoadedProjectAnswerReceived(commands.connectedClientWithProjectLoaded data)
+        {
+            if (data.gameName == gameName && data.projectName == projectName)
+            {
+                Console.WriteLine("Project " + projectName + " is loaded on device: " + data.deviceName + " with ID hash: " + data.IDHash + ".");
+                Console.WriteLine("setting inventory parameters now!");
+
+                List<commands.inventoryTextureData> blocks = new List<commands.inventoryTextureData>();
+                string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + Path.DirectorySeparatorChar + "inventorySprites"; // Be careful to get the correct directory: it may not work if you are using a plug in
+                string[] spriteFiles = Directory.GetFiles(path, "*.png", SearchOption.TopDirectoryOnly);
+                foreach (string file in spriteFiles)
+                {
+                    commands.inventoryTextureData block = new commands.inventoryTextureData();
+                    block.data = File.ReadAllBytes(file);
+                    block.name = Path.GetFileNameWithoutExtension(file);
+                    blocks.Add(block);
+                }
+
+                commands.sendAppendSpritesForInventory(InventoryName, blocks);
+                commands.sendInventorySizeParameters(InventoryName, 64, 64, 24, true);
+
+                commands.sendResetInventoryItems(InventoryName);
+
+                commands.itemOrderData IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem1Use";
+                IOD.quantity = 1;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "1";
+                IOD.displayQuantity = commands.itemQuantityDisplay.NORMAL;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.BOTTOM;
+                IOD.displayPaddingLeftRight = 2;
+                IOD.tabFilters = new List<string> { "InventoryTab2" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem2Use";
+                IOD.quantity = 2;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "2";
+                IOD.displayQuantity = commands.itemQuantityDisplay.NORMAL;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.BOTTOM;
+                IOD.displayPaddingLeftRight = 2;
+                IOD.tabFilters = new List<string> { "InventoryTab2" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem3Use";
+                IOD.quantity = 3;
+                IOD.quantityMaxValue = 10;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "3";
+                IOD.displayQuantity = commands.itemQuantityDisplay.FRACTION;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.BOTTOM;
+                IOD.displayPaddingLeftRight = 2;
+                IOD.tabFilters = new List<string> { "InventoryTab2" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem4Use";
+                IOD.quantity = 4;
+                IOD.quantityMaxValue = 10;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "4";
+                IOD.displayQuantity = commands.itemQuantityDisplay.SLIDER;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.BOTTOM;
+                IOD.displaySliderBackgroundColor = commands.Color.gray;
+                IOD.displaySliderColor = commands.Color.blue;
+                IOD.tabFilters = new List<string> { "InventoryTab3" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem5Use";
+                IOD.quantity = 5;
+                IOD.quantityMaxValue = 10;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "5";
+                IOD.displayQuantity = commands.itemQuantityDisplay.SLIDER;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.CENTER;
+                IOD.displaySliderBackgroundColor = commands.Color.gray;
+                IOD.displaySliderColor = commands.Color.blue;
+                IOD.tabFilters = new List<string> { "InventoryTab3" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                IOD = new commands.itemOrderData();
+                IOD.EMTag = "InventoryItem6Use";
+                IOD.quantity = 6;
+                IOD.quantityMaxValue = 10;
+                IOD.spriteColor = commands.Color.white;
+                IOD.spriteName = "6";
+                IOD.displayQuantity = commands.itemQuantityDisplay.SLIDER;
+                IOD.displayQuantitySize = commands.itemQuantityDisplaySize.MEDIUM;
+                IOD.displayQuantityColor = commands.Color.green;
+                IOD.displayQuantityColorZero = commands.Color.red;
+                IOD.displayQuantityHorizontal = commands.itemQuantityDisplayPositionHorizontal.RIGHT;
+                IOD.displayQuantityVertical = commands.itemQuantityDisplayPositionVertical.TOP;
+                IOD.displaySliderBackgroundColor = commands.Color.gray;
+                IOD.displaySliderColor = commands.Color.blue;
+                IOD.tabFilters = new List<string> { "InventoryTab3" };
+                commands.sendAppendInventoryItem(InventoryName, IOD);
+
+                commands.sendResetInventoryTab(InventoryName);
+                commands.sendAddInventoryTab(InventoryName, "InventoryTab1", "NULL", "NULL", commands.Color.white, commands.Color.gray, "Tab 1", true);
+                commands.sendAddInventoryTab(InventoryName, "InventoryTab2", "NULL", "NULL", commands.Color.white, commands.Color.gray, "Tab 2", false);
+                commands.sendAddInventoryTab(InventoryName, "InventoryTab3", "NULL", "NULL", commands.Color.white, commands.Color.gray, "Tab 3", false);
+            }
+        }
+
     }
 }

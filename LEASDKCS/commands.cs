@@ -125,6 +125,16 @@ namespace LEASDKCS
             GET_VIRTUAL_KEYBOARD_REMAP_RULES,
             SET_VIRTUAL_KEYBOARD_REMAP_RULES,
             SET_VIRTUAL_KEYBOARD_REMAP_RULE_NAME_IN_GAME,
+
+            VIRTUAL_KEYBOARD_RESET_PRESSED_KEYS,
+
+            GET_CONNECTED_CLIENT,
+            SET_CONNECTED_CLIENT,
+            GET_CONNECTED_CLIENT_LOADED_PROJECT,
+            SET_CONNECTED_CLIENT_LOADED_PROJECT,
+            FORCE_CLIENTS_TO_LOAD_PROJECT,
+
+            VIRTUAL_MOUSE_SIMULATE_EVENT,
         }
 
         public enum serverMode
@@ -139,7 +149,8 @@ namespace LEASDKCS
             BUTTON,
             AXIS,
             POV,
-
+            TEXT,
+            INVENTORY,
         }
 
         /// <summary>
@@ -662,6 +673,26 @@ namespace LEASDKCS
         /// </summary>
         public static event EditModeExitHandler EditModeExit;
 
+        public class connectedClient
+        {
+            public string deviceName;
+            public string IDHash;
+        }
+
+        public delegate void ConnectedClientAnswerReceivedHandler(connectedClient data);
+        public static event ConnectedClientAnswerReceivedHandler ConnectedClientAnswerReceived;
+
+        public class connectedClientWithProjectLoaded
+        {
+            public string deviceName;
+            public string IDHash;
+            public string gameName;
+            public string projectName;
+        }
+
+        public delegate void ConnectedClientLoadedProjectAnswerReceivedHandler(connectedClientWithProjectLoaded data);
+        public static event ConnectedClientLoadedProjectAnswerReceivedHandler ConnectedClientLoadedProjectAnswerReceived;
+
         static void localDecode(TCPLayerLite.dataBlock DB)
         {
             XmlDocument XD = new XmlDocument();
@@ -1113,6 +1144,52 @@ namespace LEASDKCS
                 if (EditModeExit != null)
                 {
                     EditModeExit.Invoke();
+                }
+            }
+            else if (CT == commandType.SET_CONNECTED_CLIENT)
+            {
+                connectedClient CC = new connectedClient();
+                foreach (XmlAttribute curXA in root.Attributes)
+                {
+                    if (curXA.Name == "deviceName")
+                    {
+                        CC.deviceName = curXA.Value;
+                    }
+                    else if (curXA.Name == "IDHash")
+                    {
+                        CC.IDHash = curXA.Value;
+                    }
+                }
+                if (ConnectedClientAnswerReceived != null)
+                {
+                    ConnectedClientAnswerReceived.Invoke(CC);
+                }
+            }
+            else if (CT == commandType.SET_CONNECTED_CLIENT_LOADED_PROJECT)
+            {
+                connectedClientWithProjectLoaded CCWPL = new connectedClientWithProjectLoaded();
+                foreach (XmlAttribute curXA in root.Attributes)
+                {
+                    if (curXA.Name == "deviceName")
+                    {
+                        CCWPL.deviceName = curXA.Value;
+                    }
+                    else if (curXA.Name == "IDHash")
+                    {
+                        CCWPL.IDHash = curXA.Value;
+                    }
+                    else if (curXA.Name == "gameName")
+                    {
+                        CCWPL.gameName = curXA.Value;
+                    }
+                    else if (curXA.Name == "projectName")
+                    {
+                        CCWPL.projectName = curXA.Value;
+                    }
+                }
+                if (ConnectedClientLoadedProjectAnswerReceived != null)
+                {
+                    ConnectedClientLoadedProjectAnswerReceived.Invoke(CCWPL);
                 }
             }
         }
@@ -2868,6 +2945,1991 @@ namespace LEASDKCS
             }
             TCPLayerLite.enqueueDataToSend(data, TCPLayerLite.deviceType.SERVER);
         }
+
+        public static void sendGetConnectedClients()
+        {
+            XmlDocument XD = new XmlDocument();
+            XD.AppendChild(XD.CreateXmlDeclaration("1.0", "UTF-8", null));
+
+            XmlNode root = XD.CreateElement("command");
+            XD.AppendChild(root);
+
+            XmlAttribute xa = XD.CreateAttribute("commandType");
+            xa.Value = ((int)commands.commandType.GET_CONNECTED_CLIENT).ToString("D", usCulture);
+            root.Attributes.Append(xa);
+
+            byte[] dataToSend;
+            using (MemoryStream MS = new MemoryStream())
+            {
+                XmlWriterSettings settings = new XmlWriterSettings();
+                settings.Encoding = System.Text.Encoding.UTF8;
+                using (XmlWriter XW = XmlWriter.Create(MS, settings))
+                {
+                    XD.Save(XW);
+                    dataToSend = MS.ToArray();
+                }
+            }
+            TCPLayerLite.enqueueDataToSend(dataToSend, TCPLayerLite.deviceType.SERVER);
+        }
+
+        public static void sendConnectedClientsProjects()
+        {
+            XmlDocument XD = new XmlDocument();
+            XD.AppendChild(XD.CreateXmlDeclaration("1.0", "UTF-8", null));
+
+            XmlNode root = XD.CreateElement("command");
+            XD.AppendChild(root);
+
+            XmlAttribute xa = XD.CreateAttribute("commandType");
+            xa.Value = ((int)commands.commandType.GET_CONNECTED_CLIENT_LOADED_PROJECT).ToString("D", usCulture);
+            root.Attributes.Append(xa);
+
+            byte[] dataToSend;
+            using (MemoryStream MS = new MemoryStream())
+            {
+                XmlWriterSettings settings = new XmlWriterSettings();
+                settings.Encoding = System.Text.Encoding.UTF8;
+                using (XmlWriter XW = XmlWriter.Create(MS, settings))
+                {
+                    XD.Save(XW);
+                    dataToSend = MS.ToArray();
+                }
+            }
+            TCPLayerLite.enqueueDataToSend(dataToSend, TCPLayerLite.deviceType.SERVER);
+        }
+
+        public static void sendForceLoadProjectOnClients(List<string> IDHashList,string gameName, string projectName)
+        {
+            XmlDocument XD = new XmlDocument();
+            XD.AppendChild(XD.CreateXmlDeclaration("1.0", "UTF-8", null));
+
+            XmlNode root = XD.CreateElement("command");
+            XD.AppendChild(root);
+
+            XmlAttribute xa = XD.CreateAttribute("commandType");
+            xa.Value = ((int)commands.commandType.FORCE_CLIENTS_TO_LOAD_PROJECT).ToString("D", usCulture);
+            root.Attributes.Append(xa);
+
+            StringBuilder SB = new StringBuilder();
+            foreach (string str in IDHashList)
+            {
+                SB.Append(str);
+                SB.Append(';');
+            }
+            xa = XD.CreateAttribute("IDHashes");
+            xa.Value = SB.ToString();
+            root.Attributes.Append(xa);
+
+            xa = XD.CreateAttribute("gameName");
+            xa.Value = gameName;
+            root.Attributes.Append(xa);
+
+            xa = XD.CreateAttribute("projectName");
+            xa.Value = projectName;
+            root.Attributes.Append(xa);
+
+            byte[] dataToSend;
+            using (MemoryStream MS = new MemoryStream())
+            {
+                XmlWriterSettings settings = new XmlWriterSettings();
+                settings.Encoding = System.Text.Encoding.UTF8;
+                using (XmlWriter XW = XmlWriter.Create(MS, settings))
+                {
+                    XD.Save(XW);
+                    dataToSend = MS.ToArray();
+                }
+            }
+            TCPLayerLite.enqueueDataToSend(dataToSend, TCPLayerLite.deviceType.SERVER);
+        }
+
+        public enum UpdateInventoryType
+        {
+            NONE = 0,
+            ADD_ITEM = 1,
+            REMOVE_ITEM = 2,
+            RESET_ITEMS = 3,
+            UPDATE_ITEMS = 4,
+            CHANGE_ITEM_QUANTITY = 5,
+            CHANGE_ITEM_COLOR = 6,
+            CHANGE_ITEM_TEXTURE = 7,
+            CHANGE_ITEMS_ORDER = 8,
+            CHANGE_ITEM_QUANTITY_DISPLAY = 9,
+            ADD_TAB = 10,
+            REMOVE_TAB = 11,
+            RESET_TAB = 12,
+            SIZE_INVENTORY = 13,
+            BACKGROUND_TEXTURES = 14,
+            APPEND_ITEM_TEXTURES = 15,
+            CLEAR_ITEM_TEXTURES = 16,
+            USE_ITEM = 17,
+            USE_TAB = 18,
+        }
+
+        public enum itemOrderDataType
+        {
+            EMPTY = 0,
+            NORMAL = 1,
+        }
+
+        public enum itemQuantityDisplay
+        {
+            NONE = 0,
+            NORMAL = 1,
+            FRACTION = 2,
+            SLIDER = 3,
+        }
+
+        public enum itemQuantityDisplaySize
+        {
+            /// <summary>
+            /// Item size / 8
+            /// </summary>
+            SMALL = 0,
+            /// <summary>
+            /// Item size / 4
+            /// </summary>
+            MEDIUM = 1,
+            /// <summary>
+            /// Item size / 2
+            /// </summary>
+            BIG = 2,
+            /// <summary>
+            /// Item size
+            /// </summary>
+            FULL = 3,
+        }
+
+        public enum itemQuantityDisplayPositionVertical
+        {
+            BOTTOM = 0,
+            CENTER = 1,
+            TOP = 2,
+        }
+
+        public enum itemQuantityDisplayPositionHorizontal
+        {
+            RIGHT = 0,
+            CENTER = 1,
+            LEFT = 2,
+        }
+
+        public struct Color
+        {
+            public float a;
+            public float r;
+            public float b;
+            public float g;
+
+            public Color(float aArg, float rArg, float bArg, float gArg)
+            {
+                a = aArg;
+                r = rArg;
+                b = bArg;
+                g = gArg;
+            }
+
+            public override string ToString()
+            {
+                return a.ToString(usCulture) + ";" + r.ToString(usCulture) + ";" + b.ToString(usCulture) + ";" + g.ToString(usCulture);
+            }
+
+            public static Color white
+            {
+                get
+                {
+                    return new Color(1f, 1f, 1f, 1f);
+                }
+            }
+            public static Color black
+            {
+                get
+                {
+                    return new Color(1f, 0f, 0f, 0f);
+                }
+            }
+            public static Color transparent
+            {
+                get
+                {
+                    return new Color(0f, 0f, 0f, 0f);
+                }
+            }
+            public static Color red
+            {
+                get
+                {
+                    return new Color(1f, 1f, 0f, 0f);
+                }
+            }
+            public static Color blue
+            {
+                get
+                {
+                    return new Color(1f, 0f, 1f, 0f);
+                }
+            }
+            public static Color green
+            {
+                get
+                {
+                    return new Color(1f, 0f, 0f, 1f);
+                }
+            }
+            public static Color gray
+            {
+                get
+                {
+                    return new Color(1f, 0.5f, 0.5f, 0.5f);
+                }
+            }
+        }
+
+        public class itemOrderData
+        {
+            public itemOrderDataType type;
+            public string EMTag;
+            public string spriteName;
+            public Color? spriteColor;
+            public int quantity;
+            public List<string> tabFilters;
+
+            public itemQuantityDisplay displayQuantity;
+            public itemQuantityDisplaySize displayQuantitySize;
+            public itemQuantityDisplayPositionVertical displayQuantityVertical;
+            public itemQuantityDisplayPositionHorizontal displayQuantityHorizontal;
+            public int quantityMaxValue;
+            public Color? displayQuantityColor;
+            public Color? displayQuantityColorZero;
+            public Color? displaySliderColor;
+            public Color? displaySliderBackgroundColor;
+            public string spriteSlider;
+            public string spriteBackgroundSlider;
+            public int displayPaddingLeftRight;
+            public int displayPaddingTopBottom;
+
+            public static itemOrderData FromXml(XmlNode xn)
+            {
+                if (xn.Name != "itemOrderData")
+                {
+                    return null;
+                }
+
+                itemOrderData retDat = new itemOrderData();
+
+                foreach (XmlAttribute xa in xn.Attributes)
+                {
+                    if (xa.Name == "type")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.type = (itemOrderDataType)value;
+                        }
+                    }
+                    else if (xa.Name == "EMTag")
+                    {
+                        retDat.EMTag = xa.Value;
+                    }
+                    else if (xa.Name == "spriteName")
+                    {
+                        retDat.spriteName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "quantity")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.quantity = value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantity")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantity = (itemQuantityDisplay)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantitySize")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantitySize = (itemQuantityDisplaySize)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityVertical")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantityVertical = (itemQuantityDisplayPositionVertical)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityHorizontal")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantityHorizontal = (itemQuantityDisplayPositionHorizontal)value;
+                        }
+                    }
+                    else if (xa.Name == "quantityMaxValue")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.quantityMaxValue = value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displayQuantityColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityColorZero")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displayQuantityColorZero = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displaySliderColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displaySliderColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displaySliderBackgroundColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displaySliderBackgroundColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteSlider")
+                    {
+                        retDat.spriteSlider = xa.Value;
+                    }
+                    else if (xa.Name == "spriteBackgroundSlider")
+                    {
+                        retDat.spriteBackgroundSlider = xa.Value;
+                    }
+                    else if (xa.Name == "displayPaddingLeftRight")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayPaddingLeftRight = value;
+                        }
+                    }
+                    else if (xa.Name == "displayPaddingTopBottom")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayPaddingTopBottom = value;
+                        }
+                    }
+                }
+
+                foreach (XmlNode child in xn.ChildNodes)
+                {
+                    if (child.Name == "tabFilter")
+                    {
+                        if (retDat.tabFilters == null)
+                        {
+                            retDat.tabFilters = new List<string>();
+                        }
+
+                        XmlAttribute xa = child.Attributes["tabFilter"];
+                        if (xa != null)
+                        {
+                            retDat.tabFilters.Add(xa.Value);
+                        }
+                    }
+                }
+
+                return retDat;
+            }
+
+            public void appendToXmlNode(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlNode node = XD.CreateElement("itemOrderData");
+                xn.AppendChild(node);
+
+                appendToNode(ref node);
+            }
+            void appendToNode(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("type");
+                xa.Value = ((int)type).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("EMTag");
+                xa.Value = EMTag;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteName");
+                xa.Value = spriteName;
+                xn.Attributes.Append(xa);
+
+                StringBuilder SB;
+                if (spriteColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                xa = XD.CreateAttribute("quantity");
+                xa.Value = quantity.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantity");
+                xa.Value = ((int)displayQuantity).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantitySize");
+                xa.Value = ((int)displayQuantitySize).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantityVertical");
+                xa.Value = ((int)displayQuantityVertical).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantityHorizontal");
+                xa.Value = ((int)displayQuantityHorizontal).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantityMaxValue");
+                xa.Value = quantityMaxValue.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                if (displayQuantityColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displayQuantityColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displayQuantityColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displayQuantityColorZero.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displayQuantityColorZero.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displayQuantityColorZero");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displaySliderColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displaySliderColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displaySliderColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displaySliderBackgroundColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displaySliderBackgroundColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displaySliderBackgroundColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                xa = XD.CreateAttribute("spriteSlider");
+                xa.Value = spriteSlider;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteBackgroundSlider");
+                xa.Value = spriteBackgroundSlider;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayPaddingLeftRight");
+                xa.Value = displayPaddingLeftRight.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayPaddingTopBottom");
+                xa.Value = displayPaddingTopBottom.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                if (tabFilters != null && tabFilters.Count > 0)
+                {
+                    foreach (string filter in tabFilters)
+                    {
+                        XmlNode tabFilterNode = XD.CreateElement("tabFilter");
+                        xn.AppendChild(tabFilterNode);
+
+                        xa = XD.CreateAttribute("tabEMTag");
+                        xa.Value = filter;
+                        tabFilterNode.Attributes.Append(xa);
+                    }
+                }
+            }
+
+            public void appendToXmlNodeLite(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlNode node = XD.CreateElement("itemOrderData");
+                xn.AppendChild(node);
+
+                appendToNodeLite(ref node);
+            }
+            void appendToNodeLite(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("type");
+                xa.Value = ((int)type).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("EMTag");
+                xa.Value = EMTag;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantity");
+                xa.Value = quantity.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+            }
+
+        }
+
+        public class inventoryTextureData
+        {
+            public string name;
+            public byte[] data;
+
+            public static inventoryTextureData FromXml(XmlNode xn)
+            {
+                if (xn.Name != "inventoryTextureData")
+                {
+                    return null;
+                }
+
+                inventoryTextureData retDat = new inventoryTextureData();
+
+                foreach (XmlAttribute xa in xn.Attributes)
+                {
+                    if (xa.Name == "name")
+                    {
+                        retDat.name = xa.Value;
+                    }
+                    else if (xa.Name == "data")
+                    {
+                        try
+                        {
+                            retDat.data = System.Convert.FromBase64String(xa.Value);
+                        }
+                        catch { }
+                    }
+                }
+
+                return retDat;
+            }
+
+            public void appendToXmlNode(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlNode node = XD.CreateElement("inventoryTextureData");
+                xn.AppendChild(node);
+
+                appendToNode(ref node);
+            }
+            void appendToNode(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("name");
+                xa.Value = name;
+                xn.Attributes.Append(xa);
+
+                if (data != null)
+                {
+                    xa = XD.CreateAttribute("data");
+                    xa.Value = System.Convert.ToBase64String(data);
+                    xn.Attributes.Append(xa);
+                }
+            }
+        }
+
+        public class UpdateInventory
+        {
+            public string inventoryName;
+            public UpdateInventoryType type;
+            public int quantity;
+            public string itemEMTag;
+            public string spriteName;
+            public Color? spriteColor;
+            public string itemTab;
+            public List<string> tabFilters;
+
+            public itemQuantityDisplay displayQuantity;
+            public itemQuantityDisplaySize displayQuantitySize;
+            public itemQuantityDisplayPositionVertical displayQuantityVertical;
+            public itemQuantityDisplayPositionHorizontal displayQuantityHorizontal;
+            public int quantityMaxValue;
+            public Color? displayQuantityColor;
+            public Color? displayQuantityColorZero;
+            public Color? displaySliderColor;
+            public Color? displaySliderBackgroundColor;
+            public string spriteSlider;
+            public string spriteBackgroundSlider;
+            public int displayPaddingLeftRight;
+            public int displayPaddingTopBottom;
+
+            public float cellWidth;
+            public float cellHeight;
+            public int spacing;
+            public int padding;
+
+            public string spriteActiveName;
+            public string spriteInactiveName;
+            public string spriteBackgroundName;
+            public string spriteTabsBackgroundName;
+            public string spriteInventoryBackgroundName;
+            public string spriteScrollHandleName;
+            public string spriteScrollZoneName;
+            public string spriteEmptySlotName;
+            public Color? spriteActiveColor;
+            public Color? spriteInactiveColor;
+            public Color? spriteBackgroundColor;
+            public Color? spriteTabsBackgroundColor;
+            public Color? spriteInventoryBackgroundColor;
+            public Color? spriteScrollHandleColor;
+            public Color? spriteScrollZoneColor;
+            public Color? spriteEmptySlotColor;
+
+            public bool dragAllowed;
+            public bool notFilteredTab;
+
+            public List<itemOrderData> itemsOrdered;
+
+            public List<inventoryTextureData> textures;
+
+            public static UpdateInventory FromXml(XmlDocument XD)
+            {
+                XmlNode root = XD.SelectSingleNode("UpdateInventory");
+                return FromXml(root);
+            }
+            public static UpdateInventory FromXml(XmlNode xn)
+            {
+                if (xn == null)
+                {
+                    return null;
+                }
+                if (xn.Name != "UpdateInventory")
+                {
+                    return null;
+                }
+
+                UpdateInventory retDat = new UpdateInventory();
+
+                foreach (XmlAttribute xa in xn.Attributes)
+                {
+                    if (xa.Name == "inventoryName")
+                    {
+                        retDat.inventoryName = xa.Value;
+                    }
+                    else if (xa.Name == "type")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.type = (UpdateInventoryType)value;
+                        }
+                    }
+                    else if (xa.Name == "quantity")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.quantity = value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantity")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantity = (itemQuantityDisplay)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantitySize")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantitySize = (itemQuantityDisplaySize)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityVertical")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantityVertical = (itemQuantityDisplayPositionVertical)value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityHorizontal")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayQuantityHorizontal = (itemQuantityDisplayPositionHorizontal)value;
+                        }
+                    }
+                    else if (xa.Name == "quantityMaxValue")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.quantityMaxValue = value;
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displayQuantityColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displayQuantityColorZero")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displayQuantityColorZero = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displaySliderColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displaySliderColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "displaySliderBackgroundColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.displaySliderBackgroundColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteSlider")
+                    {
+                        retDat.spriteSlider = xa.Value;
+                    }
+                    else if (xa.Name == "spriteBackgroundSlider")
+                    {
+                        retDat.spriteBackgroundSlider = xa.Value;
+                    }
+                    else if (xa.Name == "displayPaddingLeftRight")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayPaddingLeftRight = value;
+                        }
+                    }
+                    else if (xa.Name == "displayPaddingTopBottom")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.displayPaddingTopBottom = value;
+                        }
+                    }
+                    else if (xa.Name == "itemEMTag")
+                    {
+                        retDat.itemEMTag = xa.Value;
+                    }
+                    else if (xa.Name == "spriteName")
+                    {
+                        retDat.spriteName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "itemTab")
+                    {
+                        retDat.itemTab = xa.Value;
+                    }
+                    else if (xa.Name == "cellWidth")
+                    {
+                        float value;
+                        if (float.TryParse(xa.Value, NumberStyles.Float, usCulture, out value))
+                        {
+                            retDat.cellWidth = value;
+                        }
+                    }
+                    else if (xa.Name == "cellHeight")
+                    {
+                        float value;
+                        if (float.TryParse(xa.Value, NumberStyles.Float, usCulture, out value))
+                        {
+                            retDat.cellHeight = value;
+                        }
+                    }
+                    else if (xa.Name == "spacing")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.spacing = value;
+                        }
+                    }
+                    else if (xa.Name == "padding")
+                    {
+                        int value;
+                        if (int.TryParse(xa.Value, NumberStyles.Integer, usCulture, out value))
+                        {
+                            retDat.padding = value;
+                        }
+                    }
+                    else if (xa.Name == "spriteActiveName")
+                    {
+                        retDat.spriteActiveName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteInactiveName")
+                    {
+                        retDat.spriteInactiveName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteBackgroundName")
+                    {
+                        retDat.spriteBackgroundName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteTabsBackgroundName")
+                    {
+                        retDat.spriteTabsBackgroundName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteInventoryBackgroundName")
+                    {
+                        retDat.spriteInventoryBackgroundName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteScrollHandleName")
+                    {
+                        retDat.spriteScrollHandleName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteScrollZoneName")
+                    {
+                        retDat.spriteScrollZoneName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteEmptySlotName")
+                    {
+                        retDat.spriteEmptySlotName = xa.Value;
+                    }
+                    else if (xa.Name == "spriteActiveColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteActiveColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteInactiveColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteInactiveColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteBackgroundColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteBackgroundColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteTabsBackgroundColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteTabsBackgroundColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteInventoryBackgroundColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteInventoryBackgroundColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteScrollHandleColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteScrollHandleColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteScrollZoneColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteScrollZoneColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "spriteEmptySlotColor")
+                    {
+                        string[] splitVal = xa.Value.Split(semicolon, StringSplitOptions.RemoveEmptyEntries);
+                        if (splitVal.Length == 4)
+                        {
+                            float a;
+                            if (float.TryParse(splitVal[0], NumberStyles.Float, usCulture, out a))
+                            {
+                                float r;
+                                if (float.TryParse(splitVal[1], NumberStyles.Float, usCulture, out r))
+                                {
+                                    float g;
+                                    if (float.TryParse(splitVal[2], NumberStyles.Float, usCulture, out g))
+                                    {
+                                        float b;
+                                        if (float.TryParse(splitVal[3], NumberStyles.Float, usCulture, out b))
+                                        {
+                                            retDat.spriteEmptySlotColor = new Color(r, g, b, a);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (xa.Name == "dragAllowed")
+                    {
+                        bool.TryParse(xa.Value, out retDat.dragAllowed);
+                    }
+                    else if (xa.Name == "notFilteredTab")
+                    {
+                        bool.TryParse(xa.Value, out retDat.notFilteredTab);
+                    }
+                }
+
+                if (xn.ChildNodes.Count > 0)
+                {
+                    retDat.itemsOrdered = new List<itemOrderData>(xn.ChildNodes.Count);
+                    foreach (XmlNode child in xn.ChildNodes)
+                    {
+                        if (child.Name == "itemOrderData")
+                        {
+                            itemOrderData IOD = itemOrderData.FromXml(child);
+                            if (IOD != null)
+                            {
+                                retDat.itemsOrdered.Add(IOD);
+                            }
+                        }
+                        else if (child.Name == "inventoryTextureData")
+                        {
+                            if (retDat.textures == null)
+                            {
+                                retDat.textures = new List<inventoryTextureData>();
+                            }
+
+                            inventoryTextureData TD = inventoryTextureData.FromXml(child);
+                            if (TD != null)
+                            {
+                                retDat.textures.Add(TD);
+                            }
+                        }
+                        else if (child.Name == "tabFilter")
+                        {
+                            if (retDat.tabFilters == null)
+                            {
+                                retDat.tabFilters = new List<string>();
+                            }
+
+                            XmlAttribute xa = child.Attributes["tabEMTag"];
+                            if (xa != null)
+                            {
+                                retDat.tabFilters.Add(xa.Value);
+                            }
+                        }
+                    }
+                }
+
+                return retDat;
+            }
+
+            public XmlDocument ToXml()
+            {
+                XmlDocument XD = new XmlDocument();
+                XD.AppendChild(XD.CreateXmlDeclaration("1.0", "UTF-8", null));
+
+                XmlNode root = XD.CreateElement("UpdateInventory");
+                XD.AppendChild(root);
+
+                appendToNode(ref root);
+
+                return XD;
+            }
+            public void appendToXmlNode(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlNode node = XD.CreateElement("UpdateInventory");
+                xn.AppendChild(node);
+
+                appendToNode(ref node);
+            }
+            void appendToNode(ref XmlNode xn)
+            {
+                if (type == UpdateInventoryType.USE_ITEM || type == UpdateInventoryType.USE_TAB)
+                {
+                    appendToNodeLite(ref xn);
+                }
+                else if (type == UpdateInventoryType.CHANGE_ITEMS_ORDER)
+                {
+                    appendToNodeForOrderData(ref xn);
+                }
+                else
+                {
+                    appendToNodeFull(ref xn);
+                }
+            }
+            void appendToNodeFull(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("inventoryName");
+                xa.Value = inventoryName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("type");
+                xa.Value = ((int)type).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantity");
+                xa.Value = quantity.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantity");
+                xa.Value = ((int)displayQuantity).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantitySize");
+                xa.Value = ((int)displayQuantitySize).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantityVertical");
+                xa.Value = ((int)displayQuantityVertical).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayQuantityHorizontal");
+                xa.Value = ((int)displayQuantityHorizontal).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantityMaxValue");
+                xa.Value = quantityMaxValue.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                StringBuilder SB;
+                if (displayQuantityColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displayQuantityColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displayQuantityColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displayQuantityColorZero.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displayQuantityColorZero.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displayQuantityColorZero.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displayQuantityColorZero");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displaySliderColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displaySliderColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displaySliderColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (displaySliderBackgroundColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(displaySliderBackgroundColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(displaySliderBackgroundColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("displaySliderBackgroundColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                xa = XD.CreateAttribute("spriteSlider");
+                xa.Value = spriteSlider;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteBackgroundSlider");
+                xa.Value = spriteBackgroundSlider;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayPaddingLeftRight");
+                xa.Value = displayPaddingLeftRight.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("displayPaddingTopBottom");
+                xa.Value = displayPaddingTopBottom.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("itemEMTag");
+                xa.Value = itemEMTag;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteName");
+                xa.Value = spriteName;
+                xn.Attributes.Append(xa);
+
+                if (spriteColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                xa = XD.CreateAttribute("itemTab");
+                xa.Value = itemTab;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("cellWidth");
+                xa.Value = cellWidth.ToString(usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("cellHeight");
+                xa.Value = cellHeight.ToString(usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spacing");
+                xa.Value = spacing.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("padding");
+                xa.Value = padding.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteActiveName");
+                xa.Value = spriteActiveName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteInactiveName");
+                xa.Value = spriteInactiveName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteBackgroundName");
+                xa.Value = spriteBackgroundName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteTabsBackgroundName");
+                xa.Value = spriteTabsBackgroundName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteInventoryBackgroundName");
+                xa.Value = spriteInventoryBackgroundName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteScrollHandleName");
+                xa.Value = spriteScrollHandleName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteScrollZoneName");
+                xa.Value = spriteScrollZoneName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("spriteEmptySlotName");
+                xa.Value = spriteEmptySlotName;
+                xn.Attributes.Append(xa);
+
+                if (spriteActiveColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteActiveColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteActiveColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteActiveColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteActiveColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteActiveColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteInactiveColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteInactiveColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInactiveColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInactiveColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInactiveColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteInactiveColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteBackgroundColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteBackgroundColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteBackgroundColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteBackgroundColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteBackgroundColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteBackgroundColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteTabsBackgroundColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteTabsBackgroundColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteTabsBackgroundColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteTabsBackgroundColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteTabsBackgroundColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteTabsBackgroundColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteInventoryBackgroundColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteInventoryBackgroundColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInventoryBackgroundColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInventoryBackgroundColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteInventoryBackgroundColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteInventoryBackgroundColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteScrollHandleColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteScrollHandleColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollHandleColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollHandleColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollHandleColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteScrollHandleColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteScrollZoneColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteScrollZoneColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollZoneColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollZoneColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteScrollZoneColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteScrollZoneColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                if (spriteEmptySlotColor.HasValue)
+                {
+                    SB = new StringBuilder();
+                    SB.Append(spriteEmptySlotColor.Value.a.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteEmptySlotColor.Value.r.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteEmptySlotColor.Value.g.ToString(usCulture));
+                    SB.Append(';');
+                    SB.Append(spriteEmptySlotColor.Value.b.ToString(usCulture));
+                    xa = XD.CreateAttribute("spriteEmptySlotColor");
+                    xa.Value = SB.ToString();
+                    xn.Attributes.Append(xa);
+                }
+
+                xa = XD.CreateAttribute("dragAllowed");
+                xa.Value = dragAllowed.ToString(usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("notFilteredTab");
+                xa.Value = notFilteredTab.ToString(usCulture);
+                xn.Attributes.Append(xa);
+
+                if (itemsOrdered != null && itemsOrdered.Count > 0)
+                {
+                    foreach (itemOrderData IOD in itemsOrdered)
+                    {
+                        IOD.appendToXmlNode(ref xn);
+                    }
+                }
+                if (textures != null && textures.Count > 0)
+                {
+                    foreach (inventoryTextureData TD in textures)
+                    {
+                        TD.appendToXmlNode(ref xn);
+                    }
+                }
+                if (tabFilters != null && tabFilters.Count > 0)
+                {
+                    foreach (string filter in tabFilters)
+                    {
+                        XmlNode tabFilterNode = XD.CreateElement("tabFilter");
+                        xn.AppendChild(tabFilterNode);
+
+                        xa = XD.CreateAttribute("tabEMTag");
+                        xa.Value = filter;
+                        tabFilterNode.Attributes.Append(xa);
+                    }
+                }
+            }
+            void appendToNodeForOrderData(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("inventoryName");
+                xa.Value = inventoryName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("type");
+                xa.Value = ((int)type).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantity");
+                xa.Value = quantity.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                if (itemsOrdered != null && itemsOrdered.Count > 0)
+                {
+                    foreach (itemOrderData IOD in itemsOrdered)
+                    {
+                        IOD.appendToXmlNodeLite(ref xn);
+                    }
+                }
+            }
+            void appendToNodeLite(ref XmlNode xn)
+            {
+                XmlDocument XD = xn.OwnerDocument;
+
+                XmlAttribute xa = XD.CreateAttribute("inventoryName");
+                xa.Value = inventoryName;
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("type");
+                xa.Value = ((int)type).ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("quantity");
+                xa.Value = quantity.ToString("D", usCulture);
+                xn.Attributes.Append(xa);
+
+                xa = XD.CreateAttribute("itemEMTag");
+                xa.Value = itemEMTag;
+                xn.Attributes.Append(xa);
+            }
+        }
+
+        public static void sendInventoryData(UpdateInventory ui)
+        {
+            XmlDocument XD = new XmlDocument();
+            XD.AppendChild(XD.CreateXmlDeclaration("1.0", "UTF-8", null));
+
+            XmlNode root = XD.CreateElement("command");
+            XD.AppendChild(root);
+
+            XmlAttribute xa = XD.CreateAttribute("commandType");
+            xa.Value = ((int)commands.commandType.EXTINPUT_PUSH_DATA).ToString("D", usCulture);
+            root.Attributes.Append(xa);
+
+            EMData EMD = new EMData();
+            EMD.type = EMType.INVENTORY;
+            EMD.EMTag = ui.inventoryName;
+            EMD.EMValue = ui.ToXml().OuterXml;
+
+            EMD.appendToXmlNode(ref root);
+
+            byte[] dataToSend;
+            using (MemoryStream MS = new MemoryStream())
+            {
+                XmlWriterSettings settings = new XmlWriterSettings();
+                settings.Encoding = System.Text.Encoding.UTF8;
+                using (XmlWriter XW = XmlWriter.Create(MS, settings))
+                {
+                    XD.Save(XW);
+                    dataToSend = MS.ToArray();
+                }
+            }
+            TCPLayerLite.enqueueDataToSend(dataToSend, TCPLayerLite.deviceType.SERVER);
+        }
+
+        public static void sendAppendSpritesForInventory(string inventoryName, List<inventoryTextureData> sprites)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.APPEND_ITEM_TEXTURES;
+            ui.textures = sprites;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendClearSpritesForInventory(string inventoryName)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.CLEAR_ITEM_TEXTURES;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendChangeBackgroundSpritesForInventory(string inventoryName, string spriteTabsBackgroundName, string spriteScrollHandleName, 
+            string spriteInventoryBackgroundName, string spriteBackgroundName, string spriteEmptySlotName)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.BACKGROUND_TEXTURES;
+            ui.spriteTabsBackgroundName = spriteTabsBackgroundName;
+            ui.spriteScrollHandleName = spriteScrollHandleName;
+            ui.spriteInventoryBackgroundName = spriteInventoryBackgroundName;
+            ui.spriteBackgroundName = spriteBackgroundName;
+            ui.spriteEmptySlotName = spriteEmptySlotName;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendInventorySizeParameters(string inventoryName, int cellWidth, int cellHeight, int quantity, bool dragAllowed)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.SIZE_INVENTORY;
+            ui.cellWidth = cellWidth;
+            ui.cellHeight = cellHeight;
+            ui.quantity = quantity;
+            ui.dragAllowed = dragAllowed;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendAppendInventoryItem(string inventoryName, itemOrderData IOD)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.ADD_ITEM;
+            ui.quantity = IOD.quantity;
+            ui.itemEMTag = IOD.EMTag;
+            ui.spriteName = IOD.spriteName;
+            ui.spriteColor = IOD.spriteColor;
+            ui.displayQuantity = IOD.displayQuantity;
+            ui.displayQuantitySize = IOD.displayQuantitySize;
+            ui.displayQuantityVertical = IOD.displayQuantityVertical;
+            ui.displayQuantityHorizontal = IOD.displayQuantityHorizontal;
+            ui.quantityMaxValue = IOD.quantityMaxValue;
+            ui.displayQuantityColor = IOD.displayQuantityColor;
+            ui.displayQuantityColorZero = IOD.displayQuantityColorZero;
+            ui.displaySliderColor = IOD.displaySliderColor;
+            ui.displaySliderBackgroundColor = IOD.displaySliderBackgroundColor;
+            ui.spriteSlider = IOD.spriteSlider;
+            ui.spriteBackgroundSlider = IOD.spriteBackgroundSlider;
+            ui.displayQuantityColorZero = IOD.displayQuantityColorZero;
+            ui.displayPaddingLeftRight = IOD.displayPaddingLeftRight;
+            ui.displayPaddingTopBottom = IOD.displayPaddingTopBottom;
+            ui.tabFilters = IOD.tabFilters;
+            
+            sendInventoryData(ui);
+        }
+
+        public static void sendRemoveInventoryItem(string inventoryName, string itemEMTag)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.REMOVE_ITEM;
+            ui.itemEMTag = itemEMTag;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendResetInventoryItems(string inventoryName)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.RESET_ITEMS;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendUpdateInventoryItems(string inventoryName, List<itemOrderData> IODs)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.UPDATE_ITEMS;
+            ui.itemsOrdered = IODs;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendChangeInventoryItemQuantity(string inventoryName, string itemEMTag, int quantity)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.CHANGE_ITEM_QUANTITY;
+            ui.quantity = quantity;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendChangeInventoryItemColor(string inventoryName, string itemEMTag, Color spriteColor)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.CHANGE_ITEM_COLOR;
+            ui.itemEMTag = itemEMTag;
+            ui.spriteColor = spriteColor;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendChangeInventoryItemSprite(string inventoryName, string itemEMTag, string spriteName)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.CHANGE_ITEM_TEXTURE;
+            ui.itemEMTag = itemEMTag;
+            ui.spriteName = spriteName;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendChangeInventoryItemsOrder(string inventoryName, List<itemOrderData> IODs)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.CHANGE_ITEMS_ORDER;
+            ui.itemsOrdered = IODs;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendAddInventoryTab(string inventoryName, string itemEMTag, string spriteActiveName, string spriteInactiveName, Color spriteInactiveColor, Color spriteActiveColor, string itemTab, bool notFilteredTab)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.ADD_TAB;
+            ui.itemEMTag = itemEMTag;
+            ui.spriteActiveName = spriteActiveName;
+            ui.spriteInactiveName = spriteInactiveName;
+            ui.spriteInactiveColor = spriteInactiveColor;
+            ui.spriteActiveColor = spriteActiveColor;
+            ui.itemTab = itemTab;
+            ui.notFilteredTab = notFilteredTab;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendRemoveInventoryTab(string inventoryName, string itemEMTag)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.REMOVE_TAB;
+            ui.itemEMTag = itemEMTag;
+
+            sendInventoryData(ui);
+        }
+
+        public static void sendResetInventoryTab(string inventoryName)
+        {
+            UpdateInventory ui = new UpdateInventory();
+            ui.inventoryName = inventoryName;
+            ui.type = UpdateInventoryType.RESET_TAB;
+
+            sendInventoryData(ui);
+        }
+
 
     }
 }
